@@ -17,8 +17,8 @@ def _save(fig, path):
  
 def plot_kernels(network, path):
     conv = next(l for l in network if isinstance(l, Convolutional_layer))
-    kernels = conv.kernel[:, 0]                      # (8, 3, 3): one input channel
-    limit = np.max(np.abs(kernels))                  # same color scale for all, 0 = white
+    kernels = conv.kernel[:, 0]
+    limit = np.max(np.abs(kernels))                  
     fig, axes = plt.subplots(1, len(kernels), figsize=(len(kernels) * 1.3, 1.7))
     for i, (ax, k) in enumerate(zip(axes, kernels)):
         ax.imshow(k, cmap="RdBu_r", vmin=-limit, vmax=limit)
@@ -31,7 +31,7 @@ def plot_kernels(network, path):
 def plot_feature_maps(network, x, path):
     """Runs one image through conv + ReLU and shows each kernel's output."""
     out = x
-    for layer in network[:2]:                        # conv, then ReLU
+    for layer in network[:2]:                        
         out = layer.forward_pass(out)
     fig, axes = plt.subplots(1, len(out) + 1, figsize=((len(out) + 1) * 1.3, 1.8))
     axes[0].imshow(x[0], cmap="gray")
@@ -88,12 +88,3 @@ def make_all_plots(network, x_test, y_test, folder="results"):
     plot_feature_maps(network, x_test[0], f"{folder}/feature_maps.png")
     plot_confusion_matrix(y_true, y_pred, f"{folder}/confusion.png")
     plot_misclassified(x_test, y_true, y_pred, f"{folder}/misclassified.png")
- 
- 
-if __name__ == "__main__":
-    from data import load_mnist, preprocess
-    from model import load_model
-    _, (x_test, y_test) = load_mnist()
-    x_test, y_test = preprocess(x_test, y_test, 10000)
-    make_all_plots(load_model("results/model.npz"), x_test, y_test)
-    print("plots saved in results/")

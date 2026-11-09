@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 from layer import Layer
 
 class Convolutional_layer(Layer):
@@ -8,36 +9,33 @@ class Convolutional_layer(Layer):
         self.kernel_num = kernel_num
         self.output_height = self.height - self.kernel_height + 1
         self.output_width = self.width - self.kernel_width + 1
+        self.window_size = self.channels * self.kernel_height * self.kernel_width
         self.kernel = np.random.randn(self.kernel_num, self.channels, self.kernel_height, self.kernel_width) * 0.1
         self.bias = np.random.randn(self.kernel_num) * 0.1
-        
+
     def forward_pass(self, input):
         self.input = input
-        output = np.zeros((self.kernel_num, self.output_height, self.output_width))
+        windows = sliding_window_view(input, (self.kernel_height, self.kernel_width), axis=(1, 2))
+        self.rows = windows.transpose(1, 2, 0, 3, 4).reshape(-1, self.window_size)
+        kernels = self.kernel.reshape(self.kernel_num, self.window_size)
 
-        for i in range(self.kernel_num):
-            for h in range(self.output_height):
-                for w in range(self.output_width):
-                    output[i,h,w] = np.sum(self.input[:,h:h+self.kernel_height, w:w+self.kernel_width] * self.kernel[i]) + self.bias[i]
-        return output
-    
+        output = np.dot(kernels, self.rows.T).reshape(self.kernel_num, self.output_height, self.output_width)
+        return output + self.bias[:, None, None]
+
     def backpropagation(self, output_gradient, learning_rate):
-        kernel_gradient = np.zeros(self.kernel.shape)
+        gradient = output_gradient.reshape(self.kernel_num, -1)
+        kernels = self.kernel.reshape(self.kernel_num, self.window_size)
+
+        kernel_gradient = np.dot(gradient, self.rows).reshape(self.kernel.shape)
+        bias_gradient = np.sum(gradient, axis=1)
+
+        rows_gradient = np.dot(gradient.T, kernels).reshape(self.output_height, self.output_width, self.channels, self.kernel_height, self.kernel_width)
         input_gradient = np.zeros(self.input.shape)
-        bias_gradient = np.sum(output_gradient, axis=(1, 2))
 
-        for i in range(self.kernel_num):
-            for h in range(self.output_height):
-                for w in range(self.output_width):
-                    window = self.input[:, h:h+self.kernel_height, w:w+self.kernel_width]
-                    kernel_gradient[i] += output_gradient[i, h, w] * window
-
-                    input_gradient[:, h:h+self.kernel_height, w:w+self.kernel_width] += output_gradient[i, h, w] * self.kernel[i]
+        for h in range(self.kernel_height):
+            for w in range(self.kernel_width):
+                input_gradient[:, h:h+self.output_height, w:w+self.output_width] += rows_gradient[:, :, :, h, w].transpose(2, 0, 1)
 
         self.kernel -= learning_rate * kernel_gradient
         self.bias -= learning_rate * bias_gradient
         return input_gradient
-
-
-
-

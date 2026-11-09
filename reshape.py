@@ -1,6 +1,6 @@
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 from layer import Layer
-
 
 class Maxpool_layer(Layer):
     def __init__(self, input_shape, pool_shape, stride):
@@ -10,31 +10,23 @@ class Maxpool_layer(Layer):
         self.output_height = ((self.height - self.pool_height) // self.stride + 1)
         self.output_width = ((self.width - self.pool_width) // self.stride + 1)
         
-
     def forward_pass(self, input):
         self.input = input
-        output = np.zeros((self.channels, self.output_height, self.output_width))
-        for i in range(self.channels):
-            for a in range(self.output_height):
-                for b in range(self.output_width):
-                    h, w = a * self.stride, b * self.stride
-                    output[i,a,b] = np.max(input[i, h:h+self.pool_height, w:w+self.pool_width])
-        return output
+        self.windows = sliding_window_view(input, (self.pool_height, self.pool_width), axis=(1, 2))[:, ::self.stride, ::self.stride]
+        self.output = np.max(self.windows, axis=(3, 4))
+        return self.output
         
-
     def backpropagation(self, output_gradient, learning_rate):
         input_gradient = np.zeros(self.input.shape)
+        mask = (self.windows == self.output[:, :, :, None, None])
+        gradient = mask * output_gradient[:, :, :, None, None]
 
-        for i in range(self.channels):
-            for a in range(self.output_height):
-                for b in range(self.output_width):
-                    h, w = a * self.stride, b * self.stride
-                    window = self.input[i, h:h+self.pool_height, w:w+self.pool_width]
-                    mask = (window == np.max(window))
-
-                    input_gradient[i, h:h+self.pool_height, w:w+self.pool_width] += mask * output_gradient[i, a, b]
-        return input_gradient
-
+        for a in range(self.pool_height):
+            for b in range(self.pool_width):
+                h_end = a + self.stride * self.output_height
+                w_end = b + self.stride * self.output_width
+                input_gradient[:, a:h_end:self.stride, b:w_end:self.stride] += gradient[:, :, :, a, b]
+        return input_gradient   
 
 class Flatten_layer(Layer):
     def __init__(self, input_shape, output_shape):
@@ -46,4 +38,3 @@ class Flatten_layer(Layer):
 
     def backpropagation(self, output_gradient, learning_rate):
         return np.reshape(output_gradient, self.input_shape)
-

@@ -50,3 +50,4 @@ train(network,
       )
 
 make_all_plots(network, x_test, y_test, folder="results")
+
